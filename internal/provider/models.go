@@ -102,8 +102,9 @@ func (p Provider) Fetch(ctx context.Context) ([]catalog.Model, error) {
 		return p.Account.models(), nil
 	}
 	// a vendor with no list to ask (Bedrock's runtime): the preset's
-	// models are it, unless the user said where one is
-	if pr := Preset(p.Preset); pr != nil && pr.NoList && strings.TrimSpace(p.ModelsURL) == "" {
+	// models are it, unless the user said where one is or the provider
+	// sits at a region that serves one after all
+	if pr := Preset(p.Preset); pr != nil && pr.NoList && strings.TrimSpace(p.ModelsURL) == "" && !p.listRegion(pr) {
 		return catalog.Chat(p.planModels(nil)), nil
 	}
 	// Only keys in use. An off key is not asked, and its list does not
@@ -190,6 +191,43 @@ func (p Provider) fetchOne(ctx context.Context) ([]catalog.Model, string, error)
 	// the endpoints are kept as they were: a vendor with no list (or one
 	// that wants what the key can't give) still serves the models typed in
 	return nil, "", errorf("%s — type its model ids in by hand, or give the URL its list is at", strings.Join(errs, "; "))
+}
+
+// listRegion reports whether the provider sits at one of its preset's
+// regions that serves a model list although the preset as a whole has
+// none (Region.Lists): Qianfan's pay as you go at the v2 root answers
+// /v2/models, while the plans' /tokenplan/ endpoints answer nothing.
+func (p Provider) listRegion(pr *PresetDef) bool {
+	for _, r := range pr.Regions {
+		if r.Lists && p.atRegion(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// atRegion reports whether the provider sits at a region's endpoints,
+// by path — the host may be another (a mirror, a test).
+func (p Provider) atRegion(r Region) bool {
+	for _, a := range []string{p.Chat, p.Responses, p.Anthropic} {
+		for _, b := range []string{r.Chat, r.Responses, r.Anthropic} {
+			if a != "" && b != "" && basePath(a) == basePath(b) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// basePath is a base URL's path, without scheme or host.
+func basePath(raw string) string {
+	if i := strings.Index(raw, "://"); i >= 0 {
+		raw = raw[i+3:]
+	}
+	if i := strings.IndexAny(raw, "/#?"); i >= 0 {
+		return raw[i:]
+	}
+	return ""
 }
 
 // planModels keeps a plan's own models of a vendor's list (PresetDef.Only),
@@ -472,6 +510,25 @@ var makerCatalogs = sync.OnceValue(func() []string {
 	}
 	return out
 })
+
+// ListPrice is a model's list price as its vendor's models.dev entry gives
+// it, else as its maker's does (#224): a subscription (Codex's ChatGPT
+// account, Copilot) or a relay with no models.dev id of its own is priced
+// at gpt-6-astra's or gemini-3.8-flash's maker's price, as a Claude
+// account is at Anthropic's.
+func (p Provider) ListPrice(model string) (catalog.Price, bool) {
+	if pr, ok := catalog.PricedBy(p.Catalogs(), model); ok {
+		return pr, true
+	}
+	return MakerPrice(model)
+}
+
+// MakerPrice is a model's list price as the first vendor among the presets
+// that makes the models it serves lists it; for a call whose provider has
+// gone since.
+func MakerPrice(model string) (catalog.Price, bool) {
+	return catalog.PricedBy(makerCatalogs(), model)
+}
 
 // Chosen reports whether a model is exposed.
 func (p Provider) Chosen(id string) bool {

@@ -27,6 +27,7 @@ type PresetDef struct {
 	NoKey     bool     `json:"noKey,omitempty"`     // local servers: a key is optional
 	Sponsored bool     `json:"sponsored,omitempty"` // shown first, with a tag
 	Note      string   `json:"note,omitempty"`      // one line under the name
+	Short     string   `json:"short,omitempty"`     // the add sheet's name for it, when Name is long
 	Regions   []Region `json:"regions,omitempty"`   // base-URL choices (a relay's regional endpoints, a vendor's plans)
 	// RegionLabel names what the Regions choose between, "Region" if unset.
 	RegionLabel string `json:"regionLabel,omitempty"`
@@ -54,6 +55,12 @@ type Region struct {
 	Chat      string `json:"chat,omitempty"`
 	Responses string `json:"responses,omitempty"`
 	Anthropic string `json:"anthropic,omitempty"`
+	// Lists is set on a region that serves a model list although the
+	// preset as a whole has none to ask for (NoList): a provider at its
+	// endpoints is asked for it. KeysURL, when the region's keys are made
+	// on another page than the preset's, is where its Get-a-key link goes.
+	Lists   bool   `json:"lists,omitempty"`
+	KeysURL string `json:"keysUrl,omitempty"`
 }
 
 // presets are ordered as they appear in the picker.
@@ -143,25 +150,31 @@ var presets = []PresetDef{
 			{ID: "plan-ams", Name: "Plan · Europe", Chat: "https://token-plan-ams.xiaomimimo.com/v1", Responses: "https://token-plan-ams.xiaomimimo.com/v1", Anthropic: "https://token-plan-ams.xiaomimimo.com/anthropic"},
 			{ID: "api", Name: "Pay as you go", Chat: "https://api.xiaomimimo.com/v1", Responses: "https://api.xiaomimimo.com/v1", Anthropic: "https://api.xiaomimimo.com/anthropic"},
 		}},
-	// Baidu Qianfan's Token Plan (个人版): a personal plan's quota is spent
-	// only at its own endpoints under qianfan.baidubce.com (v2 for chat
-	// completions and Responses, anthropic for messages), on a plan key of
-	// its own that the pay-as-you-go API turns away. It serves no model
-	// list, so the plan's documented models are given, less deepseek-v4-flash
-	// and kimi-k2.6, gone 2026-09-29; qianfan-code-latest is whichever the
-	// console has picked.
-	{ID: "qianfan-token-plan", Name: "Baidu Qianfan Token Plan", Icon: "baiducloud-color", Kind: KindVendor,
+	// Baidu Qianfan: a personal and an enterprise Token Plan, each at its
+	// own endpoints under qianfan.baidubce.com on a key of its own; pay as
+	// you go is the v2 API at the host's root, which serves its model list
+	// at /v2/models — the plans serve none (their /models is 404), so the
+	// models given are the plans' union as each documents them, with
+	// deepseek-v4-flash, deepseek-v3.2 and glm-5 the enterprise plan's
+	// alone; qianfan-code-latest is whichever the console has picked.
+	{ID: "baidu-qianfan", Name: "Baidu Qianfan", Icon: "baiducloud-color", Kind: KindVendor,
 		Chat: "https://qianfan.baidubce.com/v2/tokenplan/personal", Responses: "https://qianfan.baidubce.com/v2/tokenplan/personal", Anthropic: "https://qianfan.baidubce.com/anthropic/tokenplan/personal",
-		Note:    "Token Plan · 个人版",
+		Note:    "Token Plan · pay as you go",
 		Website: "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6", KeysURL: "https://console.bce.baidu.com/qianfan/resource/token-plan",
+		RegionLabel: "Plan", Regions: []Region{
+			{ID: "personal", Name: "Token Plan Personal", Chat: "https://qianfan.baidubce.com/v2/tokenplan/personal", Responses: "https://qianfan.baidubce.com/v2/tokenplan/personal", Anthropic: "https://qianfan.baidubce.com/anthropic/tokenplan/personal"},
+			{ID: "team", Name: "Token Plan Enterprise", Chat: "https://qianfan.baidubce.com/v2/tokenplan/team", Responses: "https://qianfan.baidubce.com/v2/tokenplan/team", Anthropic: "https://qianfan.baidubce.com/anthropic/tokenplan/team"},
+			{ID: "api", Name: "Pay as you go", Chat: "https://qianfan.baidubce.com/v2", Responses: "https://qianfan.baidubce.com/v2", Anthropic: "https://qianfan.baidubce.com/anthropic",
+				Lists: true, KeysURL: "https://console.bce.baidu.com/iam/#/iam/apikey/list"},
+		},
 		NoList: true,
-		Models: []string{"qianfan-code-latest", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-pro-0813", "deepseek-v4-flash-0731",
-			"glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1"}},
+		Models: []string{"qianfan-code-latest", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-pro-0813",
+			"deepseek-v4-flash", "deepseek-v4-flash-0731", "deepseek-v3.2", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5"}},
 	// Tencent Cloud's Token Plan (TokenHub): a general and a Hy plan on one
 	// sk-tp- key, served at their own endpoints under /plan, chat completions
 	// and Anthropic messages only (its Codex page asks for wire_api "chat").
 	// models.dev lists just its Hy models, so the plan's are given here.
-	{ID: "tencent-token-plan", Name: "Tencent Cloud Token Plan", Icon: "tencentcloud-color", Kind: KindVendor,
+	{ID: "tencent-token-plan", Name: "Tencent Cloud Token Plan", Short: "Tencent Cloud", Icon: "tencentcloud-color", Kind: KindVendor,
 		Chat: "https://api.lkeap.cloud.tencent.com/plan/v3", Anthropic: "https://api.lkeap.cloud.tencent.com/plan/anthropic",
 		Note:    "TokenHub · subscription",
 		Website: "https://cloud.tencent.com/document/product/1823/130060", KeysURL: "https://console.cloud.tencent.com/tokenhub/tokenplan",
@@ -171,7 +184,7 @@ var presets = []PresetDef{
 	// quota spent only at the plan's own endpoints under /plan (v2 for chat
 	// completions, anthropic for messages; its Claude Code, OpenClaw, Cherry
 	// Studio and CodeArts pages), a MaaS key to either. No Responses.
-	{ID: "huaweicloud", Name: "Huawei Cloud MaaS", Icon: "huaweicloud-color", Kind: KindVendor,
+	{ID: "huaweicloud", Name: "Huawei Cloud MaaS", Short: "Huawei Cloud", Icon: "huaweicloud-color", Kind: KindVendor,
 		Chat: "https://api.modelarts-maas.com/plan/v2", Anthropic: "https://api.modelarts-maas.com/plan/anthropic",
 		Note:    "Token Plan · 西南-贵阳一",
 		Website: "https://support.huaweicloud.com/Token-plan-maas/tokenplan-maas-0001.html", KeysURL: "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage",
@@ -368,8 +381,12 @@ func Presets() []PresetDef {
 	return out
 }
 
-// Preset finds a preset by id.
+// Preset finds a preset by id. The id the qianfan preset carried its first
+// day (qianfan-token-plan, v0.1.394) names it still.
 func Preset(id string) *PresetDef {
+	if id == "qianfan-token-plan" {
+		id = "baidu-qianfan"
+	}
 	for i := range presets {
 		if presets[i].ID == id {
 			return &presets[i]
